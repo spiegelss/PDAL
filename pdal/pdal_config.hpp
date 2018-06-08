@@ -54,7 +54,8 @@ enum class Feature
     LZMA,
     LIBXML2,
     PYTHON,
-    ARBITER
+    ARBITER,
+    ARROW
 };
 
 PDAL_DLL bool hasFeature(Feature f);

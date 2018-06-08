@@ -16,7 +16,7 @@ MATLAB_HOME=/Applications/MATLAB_R2017b.app
 export GDAL_HOME=/usr/local/opt/gdal2
 
 CONFIG="Unix Makefiles"
-CONFIG="Ninja"
+#CONFIG="Ninja"
 
 if ! [ -z "$1" ]; then
     CONFIG="$1"
@@ -42,6 +42,8 @@ CC=$CC CXX=$CXX cmake   -G "$CONFIG"  \
         -DBUILD_PLUGIN_OPENSCENEGRAPH=OFF \
         -DWITH_LAZPERF=ON \
         -DWITH_LASZIP=ON \
+        -DWITH_LZMA=ON \
+        -DWITH_ARROW=ON \
         -DWITH_EXAMPLES=ON \
         -Drdb_DIR=/Users/hobu/dev/release/riegl/rdblib-2.1.5-x86_64-darwin/interface/cpp \
         -DMRSID_INCLUDE_DIR=/Users/hobu/dev/release/mrsid/Lidar_DSDK/include \

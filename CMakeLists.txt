@@ -202,7 +202,8 @@ file(GLOB BASE_SRCS
     ${PDAL_IO_DIR}/*.cpp
     ${PDAL_KERNELS_DIR}/*.cpp
     ${PDAL_SRC_DIR}/*.cpp
-    ${PDAL_SRC_DIR}/compression/*.cpp)
+    ${PDAL_SRC_DIR}/compression/*.cpp
+    ${PDAL_SRC_DIR}/tables/*.cpp)
 file(GLOB_RECURSE PRIVATE_SRCS
     ${PDAL_FILTERS_DIR}/private/*.cpp
     ${PDAL_IO_DIR}/private/*.cpp
@@ -236,6 +237,11 @@ if (NOT PDAL_HAVE_LZMA)
     file(GLOB LZMA_SRCS
         ${PDAL_SRC_DIR}/compression/LzmaCompression.cpp)
     list(REMOVE_ITEM SRCS ${LZMA_SRCS})
+endif()
+if (NOT PDAL_HAVE_ARROW)
+    file(GLOB ARROW_SRCS
+        ${PDAL_SRC_DIR}/tables/ArrowTable.cpp)
+    list(REMOVE_ITEM SRCS ${ARROW_SRCS})
 endif()
 if (NOT PDAL_HAVE_LAZPERF)
     file(GLOB LAZPERF_SRCS
@@ -273,6 +279,7 @@ target_link_libraries(${PDAL_BASE_LIB_NAME}
         ${LIBXML2_LIBRARIES}
         ${ZLIB_LIBRARIES}
         ${LIBLZMA_LIBRARIES}
+        ${ARROW_SHARED_LIB}
         ${ZSTD_STATIC_LIB}
         ${CURL_LIBRARIES}
         ${WINSOCK_LIBRARY}

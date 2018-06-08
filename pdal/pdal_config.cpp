@@ -105,6 +105,11 @@ bool hasFeature(Feature f)
         enabled = true;
 #endif
         break;
+case Feature::ARROW:
+#ifdef PDAL_HAVE_ARROW
+        enabled = true;
+#endif
+        break;
     default:
         break;
     }
