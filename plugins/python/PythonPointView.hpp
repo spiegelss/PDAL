@@ -1,5 +1,5 @@
 /******************************************************************************
-* Copyright (c) 2011, Michael P. Gerlek (mpg@flaxen.com)
+* Copyright (c) 2018, Hobu Inc.
 *
 * All rights reserved.
 *
@@ -34,45 +34,36 @@
 
 #pragma once
 
-#include <pdal/pdal_internal.hpp>
-#include <pdal/Filter.hpp>
+#include <memory>
 
-#include "../plang/Invocation.hpp"
-
-#include <json/json.h>
+#include <pdal/PointView.hpp>
 
 namespace pdal
 {
 
-class PDAL_DLL PythonFilter : public Filter
+class PythonPointView;
+
+typedef std::shared_ptr<PythonPointView> PythonPointViewPtr;
+
+// The intent of this is NOT for it to be constructed, but to provide a
+// way, through a pointer or reference, to gain access to otherwise
+// inaccessible PointView data.
+class PDAL_DLL PythonPointView : public PointView
 {
 public:
-    PythonFilter() : Filter(), m_script(NULL)
-        {}
+    PythonPointView() = delete;
 
-    std::string getName() const;
+    // For testing only.
+    PointId index(PointId id) const
+        { return m_index[id]; }
 
-private:
-    plang::Script* m_script;
-    plang::Invocation *m_pythonMethod;
-    std::string m_source;
-    std::string m_scriptFile;
-    std::string m_module;
-    std::string m_function;
-    StringList m_addDimensions;
-    bool m_contiguous;
-
-    virtual void addArgs(ProgramArgs& args);
-    virtual void addDimensions(PointLayoutPtr layout);
-    virtual void ready(PointTableRef table);
-    virtual PointViewSet run(PointViewPtr view);
-    virtual void done(PointTableRef table);
-
-    PythonFilter& operator=(const PythonFilter&); // not implemented
-    PythonFilter(const PythonFilter&); // not implemented
-
-    MetadataNode m_totalMetadata;
-    Json::Value m_pdalargs;
+    static PythonPointViewPtr convert(PointViewPtr& v)
+    {
+        // Not until C++17
+        //return std::reinterpret_pointer_cast<PythonPointView>(v);
+        PointView *t = v.get();
+        return PythonPointViewPtr(v, reinterpret_cast<PythonPointView *>(t));
+    }
 };
 
 } // namespace pdal

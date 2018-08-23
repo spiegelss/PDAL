@@ -69,6 +69,7 @@ Invocation::Invocation(const Script& script)
     , m_module(NULL)
     , m_dictionary(NULL)
     , m_function(NULL)
+    , m_directArray(NULL)
     , m_varsIn(NULL)
     , m_varsOut(NULL)
     , m_scriptArgs(NULL)
@@ -153,7 +154,7 @@ void Invocation::insertArgument(std::string const& name, uint8_t* data,
     int flags = NPY_CARRAY;
 #endif
 
-    const int pyDataType = plang::Environment::getPythonDataType(t);
+    const int pyDataType = Environment::pythonType(t);
 
     PyObject* pyArray = PyArray_New(&PyArray_Type, nd, dims, pyDataType,
         strides, data, 0, flags, NULL);
@@ -167,7 +168,7 @@ void *Invocation::extractResult(std::string const& name,
 {
     PyObject* xarr = PyDict_GetItemString(m_varsOut, name.c_str());
     if (!xarr)
-        throw pdal::pdal_error("plang output variable '" + name + "' not found.");
+        throw pdal_error("plang output variable '" + name + "' not found.");
     if (!PyArray_Check(xarr))
         throw pdal::pdal_error("Plang output variable  '" + name +
             "' is not a numpy array");
@@ -175,7 +176,7 @@ void *Invocation::extractResult(std::string const& name,
     PyArrayObject* arr = (PyArrayObject*)xarr;
 
     npy_intp one = 0;
-    const int pyDataType = pdal::plang::Environment::getPythonDataType(t);
+    const int pyDataType = Environment::pythonType(t);
     PyArray_Descr *dtype = PyArray_DESCR(arr);
 
     npy_intp nDims = PyArray_NDIM(arr);
@@ -263,45 +264,52 @@ bool Invocation::execute()
     m_scriptArgs = PyTuple_New(numArgs);
 
     if (numArgs > 2)
-        throw pdal::pdal_error("Only two arguments -- ins and outs numpy arrays -- can be passed!");
+        throw pdal_error("Only two arguments -- ins and outs numpy "
+            "arrays -- can be passed!");
 
-    PyTuple_SetItem(m_scriptArgs, 0, m_varsIn);
-    if (numArgs > 1)
+    if (m_directArray)
     {
-        Py_INCREF(m_varsOut);
-        PyTuple_SetItem(m_scriptArgs, 1, m_varsOut);
+        PyTuple_SetItem(m_scriptArgs, 0, m_directArray);
+        if (numArgs > 1)
+        {
+            Py_INCREF(m_varsOut);
+            PyTuple_SetItem(m_scriptArgs, 1, m_varsOut);
+        }
     }
-
-    int success(0);
+    else
+    {
+        PyTuple_SetItem(m_scriptArgs, 0, m_varsIn);
+        if (numArgs > 1)
+        {
+            Py_INCREF(m_varsOut);
+            PyTuple_SetItem(m_scriptArgs, 1, m_varsOut);
+        }
+    }
 
     if (m_metadata_PyObject)
     {
-        success = PyModule_AddObject(m_module, "metadata", m_metadata_PyObject);
-        if (success)
+        if (PyModule_AddObject(m_module, "metadata", m_metadata_PyObject))
             throw pdal::pdal_error("unable to set metadata global");
         Py_INCREF(m_metadata_PyObject);
     }
 
     if (m_schema_PyObject)
     {
-        success = PyModule_AddObject(m_module, "schema", m_schema_PyObject);
-        if (success)
+        if (PyModule_AddObject(m_module, "schema", m_schema_PyObject))
             throw pdal::pdal_error("unable to set schema global");
         Py_INCREF(m_srs_PyObject);
     }
 
     if (m_srs_PyObject)
     {
-        success = PyModule_AddObject(m_module, "spatialreference", m_srs_PyObject);
-        if (success)
+        if (PyModule_AddObject(m_module, "spatialreference", m_srs_PyObject))
             throw pdal::pdal_error("unable to set spatialreference global");
         Py_INCREF(m_schema_PyObject);
     }
 
     if (m_pdalargs_PyObject)
     {
-        success = PyModule_AddObject(m_module, "pdalargs", m_pdalargs_PyObject);
-        if (success)
+        if (PyModule_AddObject(m_module, "pdalargs", m_pdalargs_PyObject))
             throw pdal::pdal_error("unable to set pdalargs global");
         Py_INCREF(m_pdalargs_PyObject);
     }
@@ -320,6 +328,7 @@ bool Invocation::execute()
 
     return (m_scriptResult == Py_True);
 }
+
 
 PyObject* getPyJSON(std::string const& str)
 {
@@ -357,6 +366,77 @@ void Invocation::setKWargs(std::string const& s)
     Py_XDECREF(m_pdalargs_PyObject);
     m_pdalargs_PyObject = getPyJSON(s);
 }
+
+
+void Invocation::createArray(char *data, point_count_t count,
+    PointLayoutPtr layout)
+{
+    DimTypeList dims = layout->dimTypes();
+
+    PyObject *fields = PyDict_New();
+    PyObject *nameslist = PyTuple_New(dims.size());
+    int i = 0;
+    for (auto& dim : dims)
+    {
+        PyObject *tup = PyTuple_New(2);
+        PyObject *name = PyUnicode_FromString(layout->dimName(dim.m_id).data());
+        PyArray_Descr *sub =
+            PyArray_DescrFromType(Environment::pythonType(dim.m_type));
+
+        PyTuple_SET_ITEM(tup, 0, (PyObject *)sub);
+        PyTuple_SET_ITEM(tup, 1, PyLong_FromLong(layout->pointSize()));
+
+        PyDict_SetItem(fields, name, tup);
+        PyTuple_SET_ITEM(nameslist, i++, name);
+    }
+
+    PyArray_Descr *descr = PyArray_DescrFromType(NPY_VOID);
+    npy_intp pointSize = layout->pointSize();
+    descr->fields = fields;
+    descr->names = nameslist;
+    descr->elsize = pointSize;
+    descr->flags = NPY_FROM_FIELDS;
+
+    npy_intp longCount(count);
+    PyObject *arr = PyArray_NewFromDescr(&PyArray_Type, descr, 1,
+        &longCount, &pointSize, data, 0, nullptr);
+
+    // Now wrap the created array in a MaskedArray.
+    PyObject *module = PyImport_ImportModule("numpy.ma");
+    PyObject *dict = PyModule_GetDict(module);
+    PyObject *keys = PyDict_Keys(dict);
+    PyObject *o = PyDict_GetItemString(dict, "MaskedArray");
+
+    PyObject *args = PyTuple_New(1);
+    PyTuple_SetItem(args, 0, arr);
+
+    m_directArray = PyObject_CallObject(o, args);
+    if (!m_directArray)
+        std::cerr << "Couldn't call object!\n";
+}
+
+
+// IMPORTANT - This only works with data that's contiguous, which is what's
+//  provided with ContiguousPointTable.
+void Invocation::setMask(PythonPointViewPtr view)
+{
+    PyArrayObject *mask =
+        (PyArrayObject *)PyObject_GetAttrString(m_directArray, "mask");
+    size_t bytes = PyArray_NBYTES(mask);
+    size_t stride = PyArray_STRIDE(mask, 0);
+    char *data = (char *)PyArray_DATA(mask);
+
+    // First fill everything with 1's (invalid)
+    // Then fill the fields for each dim in points in the view to 0 to
+    // indicate valid.
+    std::fill(data, data + bytes, 1);
+    for (PointId id = 0; id < view->size(); ++id)
+    {
+        char *pt = data + (view->index(id) * stride);
+        std::fill(pt, pt + stride, 0);
+    }
+}
+
 
 void Invocation::begin(PointView& view, MetadataNode m)
 {

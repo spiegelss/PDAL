@@ -178,6 +178,10 @@ public:
     virtual ~ContiguousPointTable();
     virtual bool supportsView() const
         { return true; }
+    char *data()
+        { return getPoint(0); }
+    point_count_t size() const
+        { return m_numPts; }
 
 protected:
     virtual char *getPoint(PointId idx);

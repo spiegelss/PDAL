@@ -309,7 +309,7 @@ void addMetadata(PyObject *dict, MetadataNode m)
     }
 }
 
-int Environment::getPythonDataType(Dimension::Type t)
+int Environment::pythonType(Dimension::Type t)
 {
     using namespace Dimension;
 

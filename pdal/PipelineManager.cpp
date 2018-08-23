@@ -45,7 +45,8 @@ namespace pdal
 {
 
 PipelineManager::PipelineManager() : m_factory(new StageFactory),
-    m_tablePtr(new PointTable()), m_table(*m_tablePtr),
+//    m_tablePtr(new PointTable()), m_table(*m_tablePtr),
+    m_tablePtr(new ContiguousPointTable()), m_table(*m_tablePtr),
     m_progressFd(-1), m_input(nullptr)
 {}
 

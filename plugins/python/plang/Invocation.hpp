@@ -40,7 +40,7 @@
 #include "Environment.hpp"
 
 #include <pdal/Dimension.hpp>
-#include <pdal/PointView.hpp>
+#include "../PythonPointView.hpp"
 
 namespace pdal
 {
@@ -59,6 +59,8 @@ public:
     void resetArguments();
 
 
+    void createArray(char *data, point_count_t count, PointLayoutPtr layout);
+    void setMask(PythonPointViewPtr view);
     // creates a Python variable pointing to a (one dimensional) C array
     // adds the new variable to the arguments dictionary
     void insertArgument(std::string const& name,
@@ -97,6 +99,7 @@ private:
     PyObject* m_module;
     PyObject* m_dictionary;
     PyObject* m_function;
+    PyObject *m_directArray;
 
     PyObject* m_varsIn;
     PyObject* m_varsOut;

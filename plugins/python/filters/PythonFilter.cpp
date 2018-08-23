@@ -76,11 +76,16 @@ void PythonFilter::ready(PointTableRef table)
 {
     if (m_source.empty())
         m_source = FileUtils::readFileIntoString(m_scriptFile);
-    static_cast<plang::Environment*>(plang::Environment::get())->set_stdout(log()->getLogStream());
+    plang::Environment::get()->set_stdout(log()->getLogStream());
     m_script = new plang::Script(m_source, m_module, m_function);
     m_pythonMethod = new plang::Invocation(*m_script);
     m_pythonMethod->compile();
     m_totalMetadata = table.metadata();
+
+    ContiguousPointTable *cpt = dynamic_cast<ContiguousPointTable *>(&table);
+    m_contiguous = (bool)cpt;
+    if (cpt)
+        m_pythonMethod->createArray(cpt->data(), cpt->size(), cpt->layout());
 }
 
 
@@ -88,8 +93,13 @@ PointViewSet PythonFilter::run(PointViewPtr view)
 {
     log()->get(LogLevel::Debug5) << "filters.python " << *m_script <<
         " processing " << view->size() << " points." << std::endl;
-    m_pythonMethod->resetArguments();
-    m_pythonMethod->begin(*view, m_totalMetadata);
+    if (m_contiguous)
+        m_pythonMethod->setMask(PythonPointView::convert(view));
+    else
+    {
+        m_pythonMethod->resetArguments();
+        m_pythonMethod->begin(*view, m_totalMetadata);
+    }
 
     if (!m_pdalargs.empty())
     {
@@ -106,8 +116,8 @@ PointViewSet PythonFilter::run(PointViewPtr view)
         PointViewPtr outview = view->makeNew();
 
         size_t arrSize(0);
-        void *pydata =
-            m_pythonMethod->extractResult("Mask", Dimension::Type::Unsigned8, arrSize);
+        void *pydata = m_pythonMethod->extractResult("Mask",
+            Dimension::Type::Unsigned8, arrSize);
         char *ok = (char *)pydata;
         for (PointId idx = 0; idx < arrSize; ++idx)
             if (*ok++)
