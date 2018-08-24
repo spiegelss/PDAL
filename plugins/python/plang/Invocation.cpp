@@ -376,6 +376,7 @@ void Invocation::createArray(char *data, point_count_t count,
     PyObject *fields = PyDict_New();
     PyObject *nameslist = PyTuple_New(dims.size());
     int i = 0;
+    int offset = 0;
     for (auto& dim : dims)
     {
         PyObject *tup = PyTuple_New(2);
@@ -384,7 +385,8 @@ void Invocation::createArray(char *data, point_count_t count,
             PyArray_DescrFromType(Environment::pythonType(dim.m_type));
 
         PyTuple_SET_ITEM(tup, 0, (PyObject *)sub);
-        PyTuple_SET_ITEM(tup, 1, PyLong_FromLong(layout->pointSize()));
+        PyTuple_SET_ITEM(tup, 1, PyLong_FromLong(offset));
+        offset += layout->dimSize(dim.m_id);
 
         PyDict_SetItem(fields, name, tup);
         PyTuple_SET_ITEM(nameslist, i++, name);
@@ -399,8 +401,9 @@ void Invocation::createArray(char *data, point_count_t count,
 
     npy_intp longCount(count);
     PyObject *arr = PyArray_NewFromDescr(&PyArray_Type, descr, 1,
-        &longCount, &pointSize, data, 0, nullptr);
+        &longCount, &pointSize, data, NPY_ARRAY_WRITEABLE, nullptr);
 
+    //m_directArray = arr;
     // Now wrap the created array in a MaskedArray.
     PyObject *module = PyImport_ImportModule("numpy.ma");
     PyObject *dict = PyModule_GetDict(module);
